@@ -1,0 +1,11 @@
+keras
+streamlit
+tensorflow
+numpy
+re
+nltk
+PIL
+emoji
+bs4
+sys
+os
