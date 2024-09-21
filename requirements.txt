@@ -1,6 +1,6 @@
 keras
 streamlit
 textblob
-PIL
+Pillow
 spacy
 deep_translator
