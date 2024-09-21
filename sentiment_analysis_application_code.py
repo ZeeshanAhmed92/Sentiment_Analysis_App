@@ -1,119 +1,153 @@
-import keras
-import streamlit as st
-import tensorflow as tf
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.models import load_model
-import numpy as np
-import re
-import nltk
+import spacy
 from PIL import Image
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-import emoji
-from bs4 import BeautifulSoup
-
-import sys
-import os
-
-# Set the default encoding to UTF-8
-os.environ['PYTHONIOENCODING'] = 'utf-8'
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
-
-
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('punkt')
+import streamlit as st
+from textblob import TextBlob
+from deep_translator import GoogleTranslator
 
 # Define the header text with custom color using HTML
 header_html1 = """
-    <h2 style="color: darkblue;">Welcome to Sentiment Analysis App</h2>
+    <h1 style="color: darkblue;"><b>Welcome to Sentiment Analysis App</b></h1>
 """
 
 # Render the HTML in Streamlit
 st.markdown(header_html1, unsafe_allow_html=True)
 
-image = Image.open("C:/Users/Hp/Desktop/Codes/Sentiment analysis/1691232378248.jpeg")
+image = Image.open("1691232378248.jpeg")
 st.image(image, caption='How are you feeling ? Lets check it out')
 
-# Loading model
-# model = keras.layers.TFSMLayer(filepath="C:/Users/Hp/Downloads/text_sentiment_analysis.h5")
-model = load_model('C:/Users/Hp/Downloads/text_sentiment_analysis.h5')
+# Load the spaCy model
+nlp = spacy.load('en_core_web_sm')
 
-def preprocess_text(text):
-    # Convert the text to UTF-8 encoding
-    text = text.encode('utf-8', 'ignore').decode('utf-8')
-    
-    # Remove HTML tags
-    text = BeautifulSoup(text, "html.parser").get_text()
+# Initialize Translator
+translator = GoogleTranslator()
 
-    # Convert to lowercase
-    text = text.lower()
+# Emotion Classes
+class_name = ['Fear', 'Surprise', 'Sadness', 'Joy', 'Love', 'Anger']
 
-    # Remove emojis
-    text = emoji.demojize(text)
+# Function to analyze sentiment using TextBlob
+def analyze_sentiment(text):
+    blob = TextBlob(text)
+    sentiment = blob.sentiment
+    return sentiment.polarity, sentiment.subjectivity
 
-    # Remove special characters and number
-    text = re.sub(r'[@#%&*^$£!()-_+={}\[\]:;<>,.?\/\\\'"`~]', '', text)
-
-    # Remove special numbers
-    text = re.sub(r'\d+', '', text)
-
-    # Remove extra spaces
-    text = re.sub(r'\s+', ' ', text).strip()
-
-    # Tokenize the text
-    words = nltk.word_tokenize(text)
-
-    # Remove stopwords
-    stop_words = set(stopwords.words('english'))
-    filtered_words = [word for word in words if word not in stop_words]
-    filtered_words = ' '.join(filtered_words)
-
-    # Lemmatize the words
-    lemmatizer = WordNetLemmatizer()
-    lemmetize_words = [lemmatizer.lemmatize(word) for word in words]
-
-    # Rejoin words to form the final processed text
-    processed_text = ' '.join(lemmetize_words)
-
-    return processed_text
-
-# Making prediction on a processed_text
-def predict_sentiment(text):
-    # Preprocess the input text
-    cleaned_text = preprocess_text(text)
-    
-    # Load or define your tokenizer
-    tokenizer = Tokenizer()
-    # tokenizer.fit_on_texts(cleaned_text)
-
-    # Convert the text to sequences
-    input_sequence = tokenizer.texts_to_sequences([cleaned_text])
-
-    # Pad the sequence to ensure it has the same length as the input the model expects
-    max_len = 100  # model's expected input length
-    padded_sequence = pad_sequences(input_sequence, maxlen=max_len, padding = 'post')
-    
-    # Predict the sentiment
-    prediction = model.predict(padded_sequence)
-    return prediction
-
-# Streamlit app
-header_html3 = """
-    <h3 style="color: darkblue;">Enter a text to analyze its sentiment 😉</h3>
-"""
-
-# Render the HTML in Streamlit
-st.markdown(header_html3, unsafe_allow_html=True)
-
-user_input = st.text_area("Enter your text here:")
-class_name = ['Fear','Surprise','Sadness','Joy','Love','Anger']
-if st.button("Analyze"):
-    if user_input:
-        result = predict_sentiment(user_input)
-        string="You are having sentiment of "+class_name[np.argmax(result, axis=1)[0]]
-        st.success(string)
+# Function to classify sentiment into emotion
+def classify_emotion(polarity):
+    if polarity < -0.5:
+        return 'Fear'
+    elif -0.5 <= polarity < -0.2:
+        return 'Sadness'
+    elif -0.2 <= polarity < 0:
+        return 'Anger'
+    elif 0 <= polarity < 0.2:
+        return 'Surprise'
+    elif 0.2 <= polarity < 0.5:
+        return 'Love'
     else:
-        st.write("Please enter some text.")
+        return 'Joy'
+
+# Function to extract entities using spaCy
+def extract_entities(text):
+    doc = nlp(text)
+    entities = [(entity.text, entity.label_) for entity in doc.ents]
+    return entities
+
+# Function to translate text to English
+def translate_to_english(text, src_lang):
+    translated = translator.translate(text, src=src_lang, dest='en')
+    return translated
+
+# Function to translate sentiment result back to original language
+def translate_to_original(text, target_lang):
+    translated = translator.translate(text, src='en', dest=target_lang)
+    return translated
+
+# Function to display a progress bar with dynamic color based on polarity
+def display_progress_bar(polarity):
+    # Normalize the polarity to a range of 0 to 1 for the bar
+    normalized_polarity = (polarity + 1) / 2
+
+    # Choose bar color based on polarity value
+    if polarity < 0:
+        bar_color = 'red'
+    else:
+        bar_color = 'green'
+
+    # Create custom HTML for the colored progress bar
+    bar_html = f"""
+    <div style="background-color: lightgray; border-radius: 5px;">
+        <div style="width: {normalized_polarity * 100}%; background-color: {bar_color}; height: 20px; border-radius: 5px;"></div>
+    </div>
+    """
+    # Display the custom progress bar using markdown
+    st.markdown(bar_html, unsafe_allow_html=True)
+
+
+# Sidebar for user input
+st.sidebar.subheader("Input Options")
+
+# Language selection
+selected_lang = st.sidebar.selectbox("Select Input Language", ["en", "es", "fr", "de", "it", "auto"], index=0)
+
+# Subjectivity threshold
+subjectivity_threshold = st.sidebar.slider("Subjectivity Threshold", 0.0, 1.0, 0.5)
+
+# Text input on the sidebar
+user_input = st.sidebar.text_area("Enter Text Here", "")
+
+# Button to trigger analysis
+if st.sidebar.button("Analyze"):
+    # Translate text if needed
+    original_text = user_input
+    if selected_lang != "en" and user_input:
+        user_input = translate_to_english(user_input, selected_lang)
+        st.sidebar.write(f"Translated Input: {user_input}")
+
+    # Main content layout with two columns
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown('<h3 style="color: darkblue;"><b>Sentiment & Emotion Analysis</b></h3>', unsafe_allow_html=True)
+        if user_input:
+            # Sentiment Analysis
+            polarity, subjectivity = analyze_sentiment(user_input)
+            
+            # Classify Emotion
+            emotion = classify_emotion(polarity)
+            
+            # Translate sentiment and emotion to original language
+            if selected_lang != "en":
+                sentiment_text = translate_to_original(emotion, selected_lang)
+            else:
+                sentiment_text = emotion
+
+            # Display sentiment and emotion results
+            st.write(f"Emotion: {sentiment_text} (Polarity: {polarity:.2f})")
+            
+            # Display custom progress bar with dynamic color
+            display_progress_bar(polarity)
+            
+            # Subjectivity information
+            st.write(f"Subjectivity: {'Subjective' if subjectivity > subjectivity_threshold else 'Objective'} ({subjectivity:.2f})")
+        else:
+            st.write("Please enter text to analyze.")
+
+    with col2:
+        st.markdown('<h3 style="color: darkblue;"><b>Extracted Entities</b></h3>', unsafe_allow_html=True)
+        if user_input:
+            # Entity Recognition
+            entities = extract_entities(user_input)
+            
+            # Display entities
+            if entities:
+                for entity, label in entities:
+                    st.markdown(f"<span style='background-color: #FFFF00'>{entity}</span> ({label})", unsafe_allow_html=True)
+            else:
+                st.write("No entities found.")
+
+    # Download results
+    st.sidebar.write("**Download Results**")
+    if st.sidebar.button("Download"):
+        results = f"Emotion: {emotion} (Polarity: {polarity:.2f})\n" \
+                  f"Subjectivity: {subjectivity:.2f}\n" \
+                  f"Entities: {entities}"
+        st.sidebar.download_button("Download Analysis", data=results, file_name="sentiment_emotion_analysis.txt")
