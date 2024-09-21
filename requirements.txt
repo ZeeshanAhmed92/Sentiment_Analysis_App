@@ -1,11 +1,6 @@
 keras
 streamlit
-tensorflow
-numpy
-re
-nltk
+textblob
 PIL
-emoji
-bs4
-sys
-os
+spacy
+deep_translator
